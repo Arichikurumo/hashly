@@ -59,7 +59,11 @@ static std::wstring ReadApiKey() {
     }
     size_t b = key.find_first_not_of(L" \t\r\n\xFEFF");
     size_t e = key.find_last_not_of(L" \t\r\n");
-    return b == std::wstring::npos ? L"" : key.substr(b, e - b + 1);
+    if (b == std::wstring::npos) return L"";
+    key = key.substr(b, e - b + 1);
+    for (wchar_t c : key)  // printable ASCII only: keeps stray newlines out of the HTTP header
+        if (c < 0x21 || c > 0x7E) return L"";
+    return key;
 }
 
 static bool Md5File(const std::wstring& path, std::wstring& out) {
@@ -120,6 +124,8 @@ static int VtLookup(const std::wstring& md5, const std::wstring& key, std::strin
                         WINHTTP_HEADER_NAME_BY_INDEX, &status, &sz, WINHTTP_NO_HEADER_INDEX);
     DWORD avail = 0;
     while (WinHttpQueryDataAvailable(req.h, &avail) && avail) {
+        const size_t kMaxBody = 16u << 20;  // a real report is well under 1 MB
+        if (body.size() + avail > kMaxBody) return 0;
         size_t old = body.size();
         body.resize(old + avail);
         DWORD got = 0;
@@ -451,7 +457,12 @@ struct Task { HWND dlg; std::wstring file; HMODULE mod; };
 static DWORD WINAPI ScanThread(LPVOID p) {
     Task* t = (Task*)p;
     ScanResult* r = new ScanResult;
-    RunScan(t->file, *r);
+    try {
+        RunScan(t->file, *r);
+    } catch (...) {  // an escaping exception on this thread would take down explorer.exe
+        *r = ScanResult();
+        r->verdict = L"Unexpected error while checking the file";
+    }
     if (!PostMessageW(t->dlg, WM_SCAN_DONE, 0, (LPARAM)r)) delete r;
     HMODULE mod = t->mod;
     delete t;
@@ -481,6 +492,7 @@ static void StartScan(HWND dlg, PageCtx* ctx) {
 
 static INT_PTR CALLBACK PageProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp) {
     PageCtx* ctx = (PageCtx*)GetWindowLongPtrW(dlg, DWLP_USER);
+    if (!ctx && msg != WM_INITDIALOG) return FALSE;  // messages sent while the dialog is still being created
     switch (msg) {
     case WM_INITDIALOG: {
         ctx = (PageCtx*)((PROPSHEETPAGEW*)lp)->lParam;
