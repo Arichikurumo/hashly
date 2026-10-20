@@ -11,3 +11,4 @@
 #define IDC_SETKEY    1009
 #define IDC_HASH      1010
 #define IDC_NAME      1011
+#define IDC_HASHLABEL 1012

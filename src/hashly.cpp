@@ -535,7 +535,7 @@ static INT_PTR CALLBACK PageProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp) {
         SetDlgItemTextW(dlg, IDC_VERDICT, s.verdict.c_str());
         SetDlgItemTextW(dlg, IDC_NAME, s.name.c_str());
         SetDlgItemTextW(dlg, IDC_INFO, s.info.c_str());
-        SetDlgItemTextW(dlg, IDC_HASH, s.hash.empty() ? L"" : (L"SHA-256  " + s.hash).c_str());
+        SetDlgItemTextW(dlg, IDC_HASH, s.hash.c_str());
         bool showList = !s.rows.empty();
         SetDlgItemTextW(dlg, IDC_DETAILS, s.details.c_str());
         ShowWindow(GetDlgItem(dlg, IDC_LIST), showList ? SW_SHOW : SW_HIDE);
