@@ -12,3 +12,5 @@
 #define IDC_HASH      1010
 #define IDC_NAME      1011
 #define IDC_HASHLABEL 1012
+#define IDC_MD5       1013
+#define IDC_MD5LABEL  1014

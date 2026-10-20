@@ -38,4 +38,4 @@ The tab's *API key file...* button creates and opens the file.
 
 ## Notes
 
-MD5 is deliberately not used: it is collision-prone, so a crafted file could borrow another file's clean verdict. A "no detections" result only means VirusTotal's engines flag nothing for this exact hash.
+MD5 is shown for information only (some tools still list files by MD5). It is not used for the lookup because it is collision-prone: a crafted file could borrow another file's clean verdict. A "no detections" result only means VirusTotal's engines flag nothing for this exact SHA-256.

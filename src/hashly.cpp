@@ -66,34 +66,49 @@ static std::wstring ReadApiKey() {
     return key;
 }
 
-static bool Sha256File(const std::wstring& path, std::wstring& out) {
+// One incremental hash (BCrypt), e.g. SHA-256 or MD5.
+struct Hasher {
+    BCRYPT_ALG_HANDLE alg = nullptr;
+    BCRYPT_HASH_HANDLE h = nullptr;
+    DWORD len = 0;
+    explicit Hasher(LPCWSTR algorithm, DWORD digestLen) : len(digestLen) {
+        if (BCryptOpenAlgorithmProvider(&alg, algorithm, nullptr, 0) != 0 ||
+            BCryptCreateHash(alg, &h, nullptr, 0, nullptr, 0, 0) != 0)
+            h = nullptr;
+    }
+    ~Hasher() {
+        if (h) BCryptDestroyHash(h);
+        if (alg) BCryptCloseAlgorithmProvider(alg, 0);
+    }
+    bool Update(const BYTE* p, DWORD n) { return h && BCryptHashData(h, const_cast<BYTE*>(p), n, 0) == 0; }
+    bool Hex(std::wstring& out) {
+        BYTE d[32];
+        if (!h || BCryptFinishHash(h, d, len, 0) != 0) return false;
+        out.clear();
+        for (DWORD i = 0; i < len; i++) {
+            wchar_t two[3];
+            swprintf_s(two, L"%02x", d[i]);
+            out += two;
+        }
+        return true;
+    }
+};
+
+// Reads the file once and computes both digests. SHA-256 is used for the lookup; MD5 is display-only.
+static bool HashFile(const std::wstring& path, std::wstring& sha256, std::wstring& md5) {
     HANDLE f = CreateFileW(path.c_str(), GENERIC_READ,
                            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,
                            OPEN_EXISTING, FILE_FLAG_SEQUENTIAL_SCAN, nullptr);
     if (f == INVALID_HANDLE_VALUE) return false;
-    BCRYPT_ALG_HANDLE alg = nullptr;
-    BCRYPT_HASH_HANDLE h = nullptr;
-    bool ok = false;
-    if (BCryptOpenAlgorithmProvider(&alg, BCRYPT_SHA256_ALGORITHM, nullptr, 0) == 0 &&
-        BCryptCreateHash(alg, &h, nullptr, 0, nullptr, 0, 0) == 0) {
-        std::vector<BYTE> buf(1 << 20);
-        DWORD n = 0;
-        BOOL r;
-        ok = true;
-        while ((r = ReadFile(f, buf.data(), (DWORD)buf.size(), &n, nullptr)) && n)
-            if (BCryptHashData(h, buf.data(), n, 0) != 0) { ok = false; break; }
-        BYTE d[32];
-        if (!r || !ok || BCryptFinishHash(h, d, sizeof(d), 0) != 0) ok = false;
-        else {
-            wchar_t hex[65];
-            for (int i = 0; i < 32; i++) swprintf_s(hex + i * 2, 3, L"%02x", d[i]);
-            out = hex;
-        }
-    }
-    if (h) BCryptDestroyHash(h);
-    if (alg) BCryptCloseAlgorithmProvider(alg, 0);
+    Hasher sha(BCRYPT_SHA256_ALGORITHM, 32), m(BCRYPT_MD5_ALGORITHM, 16);
+    std::vector<BYTE> buf(1 << 20);
+    DWORD n = 0;
+    BOOL r;
+    bool ok = true;
+    while ((r = ReadFile(f, buf.data(), (DWORD)buf.size(), &n, nullptr)) && n)
+        if (!sha.Update(buf.data(), n) || !m.Update(buf.data(), n)) { ok = false; break; }
     CloseHandle(f);
-    return ok;
+    return r && ok && sha.Hex(sha256) && m.Hex(md5);
 }
 
 // ---------------------------------------------------------------- VirusTotal
@@ -209,7 +224,8 @@ enum State { StError, StUnknown, StClean, StSuspicious, StMalicious };
 struct Row { std::wstring engine, category, result; };
 struct ScanResult {
     std::wstring verdict;   // headline
-    std::wstring hash;
+    std::wstring hash;      // SHA-256 (used for the lookup)
+    std::wstring md5;       // display only
     std::wstring name;      // local file name
     std::wstring info;      // type / size / date (success only)
     std::wstring details;   // longer message for error and unknown states
@@ -283,7 +299,7 @@ static void RunScan(const std::wstring& file, ScanResult& r) {
                     L"Free keys: https://www.virustotal.com (profile > API key).";
         return;
     }
-    if (!Sha256File(file, r.hash)) {
+    if (!HashFile(file, r.hash, r.md5)) {
         r.verdict = L"Could not read the file";
         return;
     }
@@ -474,6 +490,7 @@ static void StartScan(HWND dlg, PageCtx* ctx) {
     SetDlgItemTextW(dlg, IDC_NAME, ctx->file.substr(ctx->file.find_last_of(L'\\') + 1).c_str());
     SetDlgItemTextW(dlg, IDC_INFO, L"");
     SetDlgItemTextW(dlg, IDC_HASH, L"");
+    SetDlgItemTextW(dlg, IDC_MD5, L"");
     SetDlgItemTextW(dlg, IDC_DETAILS, L"");
     ShowWindow(GetDlgItem(dlg, IDC_LIST), SW_SHOW);
     ShowWindow(GetDlgItem(dlg, IDC_DETAILS), SW_HIDE);
@@ -536,6 +553,7 @@ static INT_PTR CALLBACK PageProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp) {
         SetDlgItemTextW(dlg, IDC_NAME, s.name.c_str());
         SetDlgItemTextW(dlg, IDC_INFO, s.info.c_str());
         SetDlgItemTextW(dlg, IDC_HASH, s.hash.c_str());
+        SetDlgItemTextW(dlg, IDC_MD5, s.md5.c_str());
         bool showList = !s.rows.empty();
         SetDlgItemTextW(dlg, IDC_DETAILS, s.details.c_str());
         ShowWindow(GetDlgItem(dlg, IDC_LIST), showList ? SW_SHOW : SW_HIDE);
