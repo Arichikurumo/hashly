@@ -210,7 +210,8 @@ struct Row { std::wstring engine, category, result; };
 struct ScanResult {
     std::wstring verdict;   // headline
     std::wstring hash;
-    std::wstring info;      // file name / type / size / date / hash (success only)
+    std::wstring name;      // local file name
+    std::wstring info;      // type / size / date (success only)
     std::wstring details;   // longer message for error and unknown states
     State state = StError;
     long long mal = 0, sus = 0, harm = 0, und = 0;
@@ -251,14 +252,11 @@ static void ParseReport(const std::string& body, const std::wstring& file, ScanR
         r.state = StClean;
     }
 
-    std::wstring name = StrMember(body, attrs, "meaningful_name");
-    if (name.empty()) name = file.substr(file.find_last_of(L'\\') + 1);
     std::wstring type = StrMember(body, attrs, "type_description");
     wchar_t size[32] = L"";
     StrFormatByteSizeW(NumMember(body, attrs, "size"), size, 32);
     long long when = NumMember(body, attrs, "last_analysis_date");
-    r.info = name + L"\r\n" + type + L"  |  " + size + L"  |  analysed " + FormatUnixTime(when) +
-             L"\r\nSHA-256 " + r.hash;
+    r.info = type + L"  |  " + size + L"  |  analysed " + FormatUnixTime(when);
 
     if (Member(body, attrs, "last_analysis_results", results)) {
         std::vector<Row> flaggedRows, otherRows;
@@ -276,6 +274,7 @@ static void ParseReport(const std::string& body, const std::wstring& file, ScanR
 }
 
 static void RunScan(const std::wstring& file, ScanResult& r) {
+    r.name = file.substr(file.find_last_of(L'\\') + 1);
     std::wstring key = ReadApiKey();
     if (key.empty()) {
         r.verdict = L"VirusTotal API key missing";
@@ -294,7 +293,6 @@ static void RunScan(const std::wstring& file, ScanResult& r) {
     case 200: ParseReport(body, file, r); break;
     case 404:
         r.state = StUnknown;
-        r.info = r.hash.empty() ? L"" : L"SHA-256 " + r.hash;
         r.verdict = L"Unknown to VirusTotal";
         r.details = L"VirusTotal has never seen a file with this hash. The file was not uploaded.\r\n"
                     L"You can upload it manually via \"Open on VirusTotal\".";
@@ -473,7 +471,9 @@ static void StartScan(HWND dlg, PageCtx* ctx) {
     ctx->res = ScanResult();
     ctx->loading = true;
     SetDlgItemTextW(dlg, IDC_VERDICT, L"Checking VirusTotal...");
+    SetDlgItemTextW(dlg, IDC_NAME, ctx->file.substr(ctx->file.find_last_of(L'\\') + 1).c_str());
     SetDlgItemTextW(dlg, IDC_INFO, L"");
+    SetDlgItemTextW(dlg, IDC_HASH, L"");
     SetDlgItemTextW(dlg, IDC_DETAILS, L"");
     ShowWindow(GetDlgItem(dlg, IDC_LIST), SW_SHOW);
     ShowWindow(GetDlgItem(dlg, IDC_DETAILS), SW_HIDE);
@@ -533,7 +533,9 @@ static INT_PTR CALLBACK PageProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp) {
         delete r;
         const ScanResult& s = ctx->res;
         SetDlgItemTextW(dlg, IDC_VERDICT, s.verdict.c_str());
+        SetDlgItemTextW(dlg, IDC_NAME, s.name.c_str());
         SetDlgItemTextW(dlg, IDC_INFO, s.info.c_str());
+        SetDlgItemTextW(dlg, IDC_HASH, s.hash.empty() ? L"" : (L"SHA-256  " + s.hash).c_str());
         bool showList = !s.rows.empty();
         SetDlgItemTextW(dlg, IDC_DETAILS, s.details.c_str());
         ShowWindow(GetDlgItem(dlg, IDC_LIST), showList ? SW_SHOW : SW_HIDE);

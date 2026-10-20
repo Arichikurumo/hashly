@@ -9,3 +9,5 @@
 #define IDC_RESCAN    1007
 #define IDC_OPENWEB   1008
 #define IDC_SETKEY    1009
+#define IDC_HASH      1010
+#define IDC_NAME      1011
