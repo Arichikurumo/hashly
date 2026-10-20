@@ -1,4 +1,4 @@
-// MalScan: Explorer shell extension. Adds a "VirusTotal" tab to the file Properties
+// Hashly: Explorer shell extension. Adds a "VirusTotal" tab to the file Properties
 // dialog and a "Scan with VirusTotal" right-click entry. Only the MD5 hash of the
 // file is sent to VirusTotal; the file itself is never uploaded.
 #define UNICODE
@@ -18,7 +18,7 @@
 #include "resource.h"
 
 // {7B3C5E52-4A1D-4C8E-9F26-5D1B8E0A6C31}
-static const CLSID CLSID_MalScan =
+static const CLSID CLSID_Hashly =
     {0x7b3c5e52, 0x4a1d, 0x4c8e, {0x9f, 0x26, 0x5d, 0x1b, 0x8e, 0x0a, 0x6c, 0x31}};
 static const wchar_t* kClsidStr = L"{7B3C5E52-4A1D-4C8E-9F26-5D1B8E0A6C31}";
 static const wchar_t* kTabTitle = L"VirusTotal";
@@ -40,10 +40,10 @@ static std::wstring Widen(const std::string& s) {
 static std::wstring KeyFilePath() {
     wchar_t dir[MAX_PATH];
     if (FAILED(SHGetFolderPathW(nullptr, CSIDL_APPDATA, nullptr, 0, dir))) return L"";
-    return std::wstring(dir) + L"\\MalScan\\apikey.txt";
+    return std::wstring(dir) + L"\\Hashly\\apikey.txt";
 }
 
-// API key: VT_API_KEY environment variable, else %APPDATA%\MalScan\apikey.txt
+// API key: VT_API_KEY environment variable, else %APPDATA%\Hashly\apikey.txt
 static std::wstring ReadApiKey() {
     wchar_t env[256];
     DWORD n = GetEnvironmentVariableW(L"VT_API_KEY", env, 256);
@@ -102,7 +102,7 @@ struct WinHttpHandle {
 
 // Returns the HTTP status, or 0 on transport failure.
 static int VtLookup(const std::wstring& md5, const std::wstring& key, std::string& body) {
-    WinHttpHandle ses(WinHttpOpen(L"MalScan/1.0", WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY,
+    WinHttpHandle ses(WinHttpOpen(L"Hashly/1.0", WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY,
                                   WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0));
     if (!ses.h) return 0;
     WinHttpHandle con(WinHttpConnect(ses.h, L"www.virustotal.com", INTERNET_DEFAULT_HTTPS_PORT, 0));
@@ -589,12 +589,12 @@ static UINT CALLBACK PageCallback(HWND, UINT msg, LPPROPSHEETPAGEW psp) {
 
 // ---------------------------------------------------------------- COM object
 
-class MalScan : public IShellExtInit, public IShellPropSheetExt, public IContextMenu {
+class Hashly : public IShellExtInit, public IShellPropSheetExt, public IContextMenu {
     LONG ref_ = 1;
     std::wstring file_;
 public:
-    MalScan() { InterlockedIncrement(&g_refs); }
-    ~MalScan() { InterlockedDecrement(&g_refs); }
+    Hashly() { InterlockedIncrement(&g_refs); }
+    ~Hashly() { InterlockedDecrement(&g_refs); }
 
     // IUnknown
     STDMETHODIMP QueryInterface(REFIID iid, void** pp) override {
@@ -693,7 +693,7 @@ public:
     }
     STDMETHODIMP CreateInstance(IUnknown* outer, REFIID iid, void** pp) override {
         if (outer) return CLASS_E_NOAGGREGATION;
-        MalScan* obj = new MalScan;
+        Hashly* obj = new Hashly;
         HRESULT hr = obj->QueryInterface(iid, pp);
         obj->Release();
         return hr;
@@ -712,7 +712,7 @@ BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID) {
 }
 
 STDAPI DllGetClassObject(REFCLSID clsid, REFIID iid, void** pp) {
-    if (clsid != CLSID_MalScan) return CLASS_E_CLASSNOTAVAILABLE;
+    if (clsid != CLSID_Hashly) return CLASS_E_CLASSNOTAVAILABLE;
     Factory* f = new Factory;
     HRESULT hr = f->QueryInterface(iid, pp);
     f->Release();
@@ -731,21 +731,21 @@ STDAPI DllRegisterServer() {
     wchar_t dll[MAX_PATH];
     GetModuleFileNameW(g_inst, dll, MAX_PATH);
     std::wstring clsid = std::wstring(L"Software\\Classes\\CLSID\\") + kClsidStr;
-    bool ok = SetReg(clsid, nullptr, L"MalScan VirusTotal") &&
+    bool ok = SetReg(clsid, nullptr, L"Hashly VirusTotal") &&
               SetReg(clsid + L"\\InprocServer32", nullptr, dll) &&
               SetReg(clsid + L"\\InprocServer32", L"ThreadingModel", L"Apartment") &&
-              SetReg(L"Software\\Classes\\*\\shellex\\PropertySheetHandlers\\MalScan", nullptr, kClsidStr) &&
-              SetReg(L"Software\\Classes\\*\\shellex\\ContextMenuHandlers\\MalScan", nullptr, kClsidStr) &&
+              SetReg(L"Software\\Classes\\*\\shellex\\PropertySheetHandlers\\Hashly", nullptr, kClsidStr) &&
+              SetReg(L"Software\\Classes\\*\\shellex\\ContextMenuHandlers\\Hashly", nullptr, kClsidStr) &&
               SetReg(L"Software\\Microsoft\\Windows\\CurrentVersion\\Shell Extensions\\Approved",
-                     kClsidStr, L"MalScan VirusTotal");
+                     kClsidStr, L"Hashly VirusTotal");
     SHChangeNotify(SHCNE_ASSOCCHANGED, SHCNF_IDLIST, nullptr, nullptr);
     return ok ? S_OK : SELFREG_E_CLASS;
 }
 
 STDAPI DllUnregisterServer() {
     RegDeleteTreeW(HKEY_CURRENT_USER, (std::wstring(L"Software\\Classes\\CLSID\\") + kClsidStr).c_str());
-    RegDeleteTreeW(HKEY_CURRENT_USER, L"Software\\Classes\\*\\shellex\\PropertySheetHandlers\\MalScan");
-    RegDeleteTreeW(HKEY_CURRENT_USER, L"Software\\Classes\\*\\shellex\\ContextMenuHandlers\\MalScan");
+    RegDeleteTreeW(HKEY_CURRENT_USER, L"Software\\Classes\\*\\shellex\\PropertySheetHandlers\\Hashly");
+    RegDeleteTreeW(HKEY_CURRENT_USER, L"Software\\Classes\\*\\shellex\\ContextMenuHandlers\\Hashly");
     RegDeleteKeyValueW(HKEY_CURRENT_USER, L"Software\\Microsoft\\Windows\\CurrentVersion\\Shell Extensions\\Approved", kClsidStr);
     SHChangeNotify(SHCNE_ASSOCCHANGED, SHCNF_IDLIST, nullptr, nullptr);
     return S_OK;

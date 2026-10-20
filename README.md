@@ -1,4 +1,4 @@
-# MalScan
+# Hashly
 
 Windows Explorer shell extension that checks a file against [VirusTotal](https://www.virustotal.com).
 
@@ -16,7 +16,7 @@ Windows Explorer shell extension that checks a file against [VirusTotal](https:/
 ## Installer
 
 ```powershell
-./build.ps1 -Installer     # -> dist\MalScan-Setup-1.0.0.exe (needs Inno Setup 6: winget install JRSoftware.InnoSetup)
+./build.ps1 -Installer     # -> dist\Hashly-Setup-1.0.0.exe (needs Inno Setup 6: winget install JRSoftware.InnoSetup)
 ```
 
 The setup is per-user (no admin), optionally asks for your API key, and can be removed via *Apps & features*.
@@ -24,8 +24,8 @@ The setup is per-user (no admin), optionally asks for your API key, and can be r
 ## Build, install, remove (without the installer)
 
 ```powershell
-./build.ps1                # -> build\malscan.dll
-./install.ps1              # copies to %LOCALAPPDATA%\MalScan and registers per user (HKCU, no admin)
+./build.ps1                # -> build\hashly.dll
+./install.ps1              # copies to %LOCALAPPDATA%\Hashly and registers per user (HKCU, no admin)
 ./install.ps1 -Uninstall
 ```
 
@@ -33,7 +33,7 @@ If Explorer has an older copy loaded, `install.ps1` warns; run `Stop-Process -Na
 
 ## API key
 
-Put the key on one line in `%APPDATA%\MalScan\apikey.txt`, or set the `VT_API_KEY` environment variable.
+Put the key on one line in `%APPDATA%\Hashly\apikey.txt`, or set the `VT_API_KEY` environment variable.
 The tab's *API key file...* button creates and opens the file.
 
 ## Notes

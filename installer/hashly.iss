@@ -1,12 +1,12 @@
 ; Inno Setup script. Build with: ./build.ps1 -Installer
-#define AppName "MalScan"
+#define AppName "Hashly"
 #define AppVersion "1.0.0"
 
 [Setup]
 AppId={{7B3C5E52-4A1D-4C8E-9F26-5D1B8E0A6C31}
 AppName={#AppName} (VirusTotal for Explorer)
 AppVersion={#AppVersion}
-AppPublisher=MalScan
+AppPublisher=Hashly
 DefaultDirName={localappdata}\{#AppName}
 DisableProgramGroupPage=yes
 DisableDirPage=yes
@@ -14,7 +14,7 @@ PrivilegesRequired=lowest
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 OutputDir=..\dist
-OutputBaseFilename=MalScan-Setup-{#AppVersion}
+OutputBaseFilename=Hashly-Setup-{#AppVersion}
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
@@ -22,13 +22,13 @@ UninstallDisplayName={#AppName} (VirusTotal for Explorer)
 
 [Files]
 ; restartreplace: if Explorer still holds an older copy, it is swapped at the next sign-in/reboot.
-Source: "..\build\malscan.dll"; DestDir: "{app}"; Flags: ignoreversion restartreplace uninsrestartdelete
+Source: "..\build\hashly.dll"; DestDir: "{app}"; Flags: ignoreversion restartreplace uninsrestartdelete
 
 [Run]
-Filename: "{sys}\regsvr32.exe"; Parameters: "/s ""{app}\malscan.dll"""; Flags: runhidden; StatusMsg: "Registering Explorer extension..."
+Filename: "{sys}\regsvr32.exe"; Parameters: "/s ""{app}\hashly.dll"""; Flags: runhidden; StatusMsg: "Registering Explorer extension..."
 
 [UninstallRun]
-Filename: "{sys}\regsvr32.exe"; Parameters: "/s /u ""{app}\malscan.dll"""; Flags: runhidden; RunOnceId: "UnregMalScan"
+Filename: "{sys}\regsvr32.exe"; Parameters: "/s /u ""{app}\hashly.dll"""; Flags: runhidden; RunOnceId: "UnregHashly"
 
 [Code]
 var
@@ -36,7 +36,7 @@ var
 
 function KeyFile: String;
 begin
-  Result := ExpandConstant('{userappdata}\MalScan\apikey.txt');
+  Result := ExpandConstant('{userappdata}\Hashly\apikey.txt');
 end;
 
 procedure InitializeWizard;
