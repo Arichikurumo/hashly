@@ -1,6 +1,6 @@
 ; Inno Setup script. Build with: ./build.ps1 -Installer
 #define AppName "Hashly"
-#define AppVersion "1.0.0"
+#define AppVersion "1.0.1"
 
 [Setup]
 AppId={{7B3C5E52-4A1D-4C8E-9F26-5D1B8E0A6C31}

@@ -1,5 +1,5 @@
 // Hashly: Explorer shell extension. Adds a "VirusTotal" tab to the file Properties
-// dialog and a "Scan with VirusTotal" right-click entry. Only the MD5 hash of the
+// dialog and a "Scan with VirusTotal" right-click entry. Only the SHA-256 hash of the
 // file is sent to VirusTotal; the file itself is never uploaded.
 #define UNICODE
 #define _UNICODE
@@ -66,7 +66,7 @@ static std::wstring ReadApiKey() {
     return key;
 }
 
-static bool Md5File(const std::wstring& path, std::wstring& out) {
+static bool Sha256File(const std::wstring& path, std::wstring& out) {
     HANDLE f = CreateFileW(path.c_str(), GENERIC_READ,
                            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,
                            OPEN_EXISTING, FILE_FLAG_SEQUENTIAL_SCAN, nullptr);
@@ -74,7 +74,7 @@ static bool Md5File(const std::wstring& path, std::wstring& out) {
     BCRYPT_ALG_HANDLE alg = nullptr;
     BCRYPT_HASH_HANDLE h = nullptr;
     bool ok = false;
-    if (BCryptOpenAlgorithmProvider(&alg, BCRYPT_MD5_ALGORITHM, nullptr, 0) == 0 &&
+    if (BCryptOpenAlgorithmProvider(&alg, BCRYPT_SHA256_ALGORITHM, nullptr, 0) == 0 &&
         BCryptCreateHash(alg, &h, nullptr, 0, nullptr, 0, 0) == 0) {
         std::vector<BYTE> buf(1 << 20);
         DWORD n = 0;
@@ -82,11 +82,11 @@ static bool Md5File(const std::wstring& path, std::wstring& out) {
         ok = true;
         while ((r = ReadFile(f, buf.data(), (DWORD)buf.size(), &n, nullptr)) && n)
             if (BCryptHashData(h, buf.data(), n, 0) != 0) { ok = false; break; }
-        BYTE d[16];
+        BYTE d[32];
         if (!r || !ok || BCryptFinishHash(h, d, sizeof(d), 0) != 0) ok = false;
         else {
-            wchar_t hex[33];
-            for (int i = 0; i < 16; i++) swprintf_s(hex + i * 2, 3, L"%02x", d[i]);
+            wchar_t hex[65];
+            for (int i = 0; i < 32; i++) swprintf_s(hex + i * 2, 3, L"%02x", d[i]);
             out = hex;
         }
     }
@@ -105,13 +105,13 @@ struct WinHttpHandle {
 };
 
 // Returns the HTTP status, or 0 on transport failure.
-static int VtLookup(const std::wstring& md5, const std::wstring& key, std::string& body) {
+static int VtLookup(const std::wstring& hash, const std::wstring& key, std::string& body) {
     WinHttpHandle ses(WinHttpOpen(L"Hashly/1.0", WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY,
                                   WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0));
     if (!ses.h) return 0;
     WinHttpHandle con(WinHttpConnect(ses.h, L"www.virustotal.com", INTERNET_DEFAULT_HTTPS_PORT, 0));
     if (!con.h) return 0;
-    std::wstring path = L"/api/v3/files/" + md5;
+    std::wstring path = L"/api/v3/files/" + hash;
     WinHttpHandle req(WinHttpOpenRequest(con.h, L"GET", path.c_str(), nullptr, WINHTTP_NO_REFERER,
                                          WINHTTP_DEFAULT_ACCEPT_TYPES, WINHTTP_FLAG_SECURE));
     if (!req.h) return 0;
@@ -209,8 +209,8 @@ enum State { StError, StUnknown, StClean, StSuspicious, StMalicious };
 struct Row { std::wstring engine, category, result; };
 struct ScanResult {
     std::wstring verdict;   // headline
-    std::wstring md5;
-    std::wstring info;      // file name / type / size / date / md5 (success only)
+    std::wstring hash;
+    std::wstring info;      // file name / type / size / date / hash (success only)
     std::wstring details;   // longer message for error and unknown states
     State state = StError;
     long long mal = 0, sus = 0, harm = 0, und = 0;
@@ -258,7 +258,7 @@ static void ParseReport(const std::string& body, const std::wstring& file, ScanR
     StrFormatByteSizeW(NumMember(body, attrs, "size"), size, 32);
     long long when = NumMember(body, attrs, "last_analysis_date");
     r.info = name + L"\r\n" + type + L"  |  " + size + L"  |  analysed " + FormatUnixTime(when) +
-             L"\r\nMD5 " + r.md5;
+             L"\r\nSHA-256 " + r.hash;
 
     if (Member(body, attrs, "last_analysis_results", results)) {
         std::vector<Row> flaggedRows, otherRows;
@@ -284,17 +284,17 @@ static void RunScan(const std::wstring& file, ScanResult& r) {
                     L"Free keys: https://www.virustotal.com (profile > API key).";
         return;
     }
-    if (!Md5File(file, r.md5)) {
+    if (!Sha256File(file, r.hash)) {
         r.verdict = L"Could not read the file";
         return;
     }
     std::string body;
-    int status = VtLookup(r.md5, key, body);
+    int status = VtLookup(r.hash, key, body);
     switch (status) {
     case 200: ParseReport(body, file, r); break;
     case 404:
         r.state = StUnknown;
-        r.info = r.md5.empty() ? L"" : L"MD5 " + r.md5;
+        r.info = r.hash.empty() ? L"" : L"SHA-256 " + r.hash;
         r.verdict = L"Unknown to VirusTotal";
         r.details = L"VirusTotal has never seen a file with this hash. The file was not uploaded.\r\n"
                     L"You can upload it manually via \"Open on VirusTotal\".";
@@ -311,7 +311,7 @@ static void RunScan(const std::wstring& file, ScanResult& r) {
 // ---------------------------------------------------------------- property page
 
 struct PageCtx {
-    std::wstring file, md5;
+    std::wstring file, hash;
     ScanResult res;
     bool loading = true;
     HFONT head = nullptr, big = nullptr, normal = nullptr;
@@ -529,7 +529,7 @@ static INT_PTR CALLBACK PageProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp) {
         ScanResult* r = (ScanResult*)lp;
         ctx->res = *r;
         ctx->loading = false;
-        ctx->md5 = r->md5;
+        ctx->hash = r->hash;
         delete r;
         const ScanResult& s = ctx->res;
         SetDlgItemTextW(dlg, IDC_VERDICT, s.verdict.c_str());
@@ -541,7 +541,7 @@ static INT_PTR CALLBACK PageProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp) {
         FillList(dlg, s);
         RedrawGraphics(dlg);
         EnableWindow(GetDlgItem(dlg, IDC_RESCAN), TRUE);
-        EnableWindow(GetDlgItem(dlg, IDC_OPENWEB), !s.md5.empty());
+        EnableWindow(GetDlgItem(dlg, IDC_OPENWEB), !s.hash.empty());
         return TRUE;
     }
     case WM_DRAWITEM: {
@@ -569,7 +569,7 @@ static INT_PTR CALLBACK PageProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp) {
         switch (LOWORD(wp)) {
         case IDC_RESCAN: StartScan(dlg, ctx); return TRUE;
         case IDC_OPENWEB:
-            ShellExecuteW(dlg, L"open", (L"https://www.virustotal.com/gui/file/" + ctx->md5).c_str(),
+            ShellExecuteW(dlg, L"open", (L"https://www.virustotal.com/gui/file/" + ctx->hash).c_str(),
                           nullptr, nullptr, SW_SHOWNORMAL);
             return TRUE;
         case IDC_SETKEY: {

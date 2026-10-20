@@ -4,7 +4,7 @@ Windows Explorer shell extension that checks a file against [VirusTotal](https:/
 
 - Adds a **VirusTotal** tab to the file *Properties* dialog and a **Scan with VirusTotal** right-click entry
   (Windows 11: under *Show more options*).
-- Computes the file's MD5 and looks it up via the VirusTotal v3 API. **Only the hash is sent; the file is never uploaded.**
+- Computes the file's SHA-256 and looks it up via the VirusTotal v3 API. **Only the hash is sent; the file is never uploaded.**
 - Shows a score ring (e.g. 5/72), a headline, a proportion bar and a per-vendor result table.
 
 ## Requirements
@@ -38,4 +38,4 @@ The tab's *API key file...* button creates and opens the file.
 
 ## Notes
 
-MD5 lookups are fine for reputation checks but MD5 collisions can be forged; switching to SHA-256 is a small change in `Md5File`.
+MD5 is deliberately not used: it is collision-prone, so a crafted file could borrow another file's clean verdict. A "no detections" result only means VirusTotal's engines flag nothing for this exact hash.
